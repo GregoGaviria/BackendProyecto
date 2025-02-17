@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -12,28 +11,6 @@ import (
 )
 
 var db *sql.DB
-
-type Ejemplo struct {
-	Dato1 string `json:"dato1"`
-	Dato2 int    `json:"dato2"`
-}
-
-var datosEjemplo = []Ejemplo{
-	{Dato1: "aaa", Dato2: 111},
-	{Dato1: "bbb", Dato2: 222},
-	{Dato1: "ccc", Dato2: 333},
-}
-
-
-func handlerEjemplo(w http.ResponseWriter, r *http.Request) {
-	elJson, err := json.Marshal(datosEjemplo)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	w.Write(elJson)
-
-}
 
 func initDB(connString *string) error {
 	var err error
@@ -48,7 +25,7 @@ func initDB(connString *string) error {
 func main() {
 	fmt.Println("a")
 	var connString *string = flag.String("c",
-		"servidor:clave@unix(/var/run/mysqld/mysqld.sock)/webdev",
+		"servidor:clave@unix(/var/run/mysqld/mysqld.sock)/mydb",
 		`El string de conección para la conección de la base de datos
         revisar https://github.com/go-sql-driver/mysql?tab=readme-ov-file#dsn-data-source-name
         para mas detalles`,
@@ -59,7 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	http.HandleFunc("/ejemplo", handlerEjemplo)
+	http.HandleFunc("/getDistritosByCanton", handlerGetDistritosByCanton)
 	http.ListenAndServe(*port, nil)
 
 }

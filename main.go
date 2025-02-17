@@ -36,7 +36,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	http.HandleFunc("/getDistritosByCanton", handlerGetDistritosByCanton)
+	asociarHandlersRegiones()
+	asociarHandlersReportes()
+	asociarHandlersUsuarios()
 	http.ListenAndServe(*port, nil)
 
 }

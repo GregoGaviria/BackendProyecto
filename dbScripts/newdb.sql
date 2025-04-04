@@ -102,7 +102,7 @@ ENGINE = InnoDB;
 DROP TABLE IF EXISTS `mydb`.`Calles` ;
 
 CREATE TABLE IF NOT EXISTS `mydb`.`Calles` (
-  `CalleId` INT NOT NULL,
+  `CalleId` INT NOT NULL AUTO_INCREMENT,
   `NombreCalle` VARCHAR(45) NOT NULL,
   `DistritoId` INT NOT NULL,
   PRIMARY KEY (`CalleId`),

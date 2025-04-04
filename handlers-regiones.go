@@ -28,6 +28,7 @@ func handlerGetDistritosByCanton(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	var canton int
 	canton, err := strconv.Atoi(r.URL.Query().Get("Canton"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -38,7 +39,9 @@ func handlerGetDistritosByCanton(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer rows.Close()
+
 	for rows.Next() {
 		var d Distrito
 		err := rows.Scan(&d.Id, &d.NombreDistrito, &d.IdCanton)
@@ -197,4 +200,5 @@ func asociarHandlersRegiones() {
 	http.HandleFunc("/getDistritoById", handlerGetDistritoById)
 	http.HandleFunc("/getCantonById", handlerGetCantonById)
 	http.HandleFunc("/getProvinciaById", handlerGetProvinciaById)
+	http.HandleFunc("/getCantonesByUsuario", handlerGetCantonesByUsuario)
 }

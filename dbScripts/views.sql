@@ -22,9 +22,9 @@ DROP VIEW IF EXISTS `mydb`.`ProvinciasCantonesView`;
 
 CREATE VIEW IF NOT EXISTS `ProvinciasCantonesView` AS 
 SELECT
-    p.ProvinciaId as `ProvinciaId`,
-    c.CantonId as `CantonId`,
-    d.DistritoId as `DistritoId`
+    p.ProvinciaId AS `ProvinciaId`,
+    c.CantonId AS `CantonId`,
+    d.DistritoId AS `DistritoId`
 FROM
     Distritos d
 INNER JOIN Cantones c

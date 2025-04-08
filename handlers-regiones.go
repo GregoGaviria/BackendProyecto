@@ -32,12 +32,14 @@ func handlerGetDistritosByCanton(w http.ResponseWriter, r *http.Request) {
 	canton, err := strconv.Atoi(r.URL.Query().Get("Canton"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	var distritos []Distrito
 	rows, err := db.Query("SELECT * FROM Distritos WHERE Cantonid = ?", canton)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 
 	defer rows.Close()
@@ -47,12 +49,14 @@ func handlerGetDistritosByCanton(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&d.Id, &d.NombreDistrito, &d.IdCanton)
 		if err != nil {
 			log.Fatal(err)
+			return
 		}
 		distritos = append(distritos, d)
 	}
 	elJson, err := json.Marshal(distritos)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 
 	w.Write(elJson)
@@ -66,12 +70,14 @@ func handlerGetCantonesByProvincia(w http.ResponseWriter, r *http.Request) {
 	provincia, err := strconv.Atoi(r.URL.Query().Get("Provincia"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	var cantones []Canton
 	rows, err := db.Query("SELECT * FROM Cantones WHERE Provinciaid = ?", provincia)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -79,12 +85,14 @@ func handlerGetCantonesByProvincia(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&c.Id, &c.NombreCanton, &c.IdProvincia)
 		if err != nil {
 			log.Fatal(err)
+			return
 		}
 		cantones = append(cantones, c)
 	}
 	elJson, err := json.Marshal(cantones)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 
 	w.Write(elJson)
@@ -98,6 +106,7 @@ func handlerGetProvincias(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query("SELECT * FROM Provincias")
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -105,12 +114,14 @@ func handlerGetProvincias(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&p.Id, &p.NombreProvicia)
 		if err != nil {
 			log.Fatal(err)
+			return
 		}
 		provincias = append(provincias, p)
 	}
 	elJson, err := json.Marshal(provincias)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 
 	w.Write(elJson)
@@ -125,6 +136,7 @@ func handlerGetDistritoById(w http.ResponseWriter, r *http.Request) {
 	distritoId, err := strconv.Atoi(r.URL.Query().Get("id"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	var d Distrito
@@ -132,10 +144,12 @@ func handlerGetDistritoById(w http.ResponseWriter, r *http.Request) {
 	err = row.Scan(&d.Id, &d.NombreDistrito, &d.IdCanton)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 	elJson, err := json.Marshal(d)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 	w.Write(elJson)
 }
@@ -147,6 +161,7 @@ func handlerGetCantonById(w http.ResponseWriter, r *http.Request) {
 	cantonId, err := strconv.Atoi(r.URL.Query().Get("id"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	var c Canton
@@ -154,10 +169,12 @@ func handlerGetCantonById(w http.ResponseWriter, r *http.Request) {
 	err = row.Scan(&c.Id, &c.NombreCanton, &c.IdProvincia)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 	elJson, err := json.Marshal(c)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 	w.Write(elJson)
 
@@ -170,6 +187,7 @@ func handlerGetProvinciaById(w http.ResponseWriter, r *http.Request) {
 	provinciaId, err := strconv.Atoi(r.URL.Query().Get("id"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	var p Provincia
@@ -178,18 +196,18 @@ func handlerGetProvinciaById(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			w.WriteHeader(http.StatusBadRequest)
+			return
 		} else {
 			log.Fatal(err)
+			return
 		}
 	}
 	elJson, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 	w.Write(elJson)
-
-}
-func handlerGetCantonesByUsuario(w http.ResponseWriter, r *http.Request) {
 
 }
 
@@ -200,5 +218,4 @@ func asociarHandlersRegiones() {
 	http.HandleFunc("/getDistritoById", handlerGetDistritoById)
 	http.HandleFunc("/getCantonById", handlerGetCantonById)
 	http.HandleFunc("/getProvinciaById", handlerGetProvinciaById)
-	http.HandleFunc("/getCantonesByUsuario", handlerGetCantonesByUsuario)
 }

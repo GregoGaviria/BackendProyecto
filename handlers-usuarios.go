@@ -23,10 +23,10 @@ type UsuarioDistrito struct {
 }
 
 func handlerEliminarUsuario(w http.ResponseWriter, r *http.Request) {
-
+	w.WriteHeader(http.StatusNotImplemented)
 }
 func handlerEliminarUsuarioPropio(w http.ResponseWriter, r *http.Request) {
-
+	w.WriteHeader(http.StatusNotImplemented)
 }
 func handlerAsociarDistrito(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -241,7 +241,6 @@ func handlerGetDistritosByUsuario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(elJson)
-
 }
 func handlerGetDistritosPropios(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

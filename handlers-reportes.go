@@ -280,10 +280,12 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(s)
 		if err != nil {
 			w.Write([]byte(err.Error()))
+			return
 		}
 	}
 	if nivelAcceso == 0 {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 	body := struct {
 		Mensaje     string  `json:"mensaje"`
@@ -295,6 +297,7 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
+		return
 	}
 	d, _, _, route, err := reverseGeocodeRequest(body.CoordenadaY, body.CoordenadaX)
 	if err != nil {
@@ -302,9 +305,11 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &locErr) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(locErr.Msg))
+			return
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
+			return
 		}
 	}
 	var calleID int
@@ -317,6 +322,7 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
+			return
 		}
 	}
 	_, err = db.Exec("INSERT INTO Reporte"+
@@ -327,8 +333,10 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
+		return
 
 	}
+	return
 
 }
 func handlerGetReportesByDistrito(w http.ResponseWriter, r *http.Request) {
@@ -336,11 +344,46 @@ func handlerGetReportesByDistrito(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	distrito, err := strconv.Atoi(r.URL.Query().Get("Distrito"))
+	distritoId, err := strconv.Atoi(r.URL.Query().Get("id"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
-	log.Println(distrito)
+	var res []Reporte
+	rows, err := db.Query("SELECT * FROM Reporte WHERE DistritoId = ?", distritoId)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var re Reporte
+		err = rows.Scan(
+			&re.Id,
+			&re.Mensaje,
+			&re.CoordenadaX,
+			&re.CoordenadaY,
+			&re.Activo,
+			&re.TipoReporte,
+			&re.UsuarioId,
+			&re.CalleId,
+			&re.DistritoId,
+		)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		res = append(res, re)
+	}
+	elJson, err := json.Marshal(res)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	w.Write(elJson)
 }
 func handlerGetReporteById(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -350,6 +393,7 @@ func handlerGetReporteById(w http.ResponseWriter, r *http.Request) {
 	reporteId, err := strconv.Atoi(r.URL.Query().Get("id"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	var re Reporte
@@ -368,11 +412,137 @@ func handlerGetReporteById(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	elJson, err := json.Marshal(re)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 
+	w.Write(elJson)
+
+}
+func handlerGetReportesByUsuario(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	usuarioId, err := strconv.Atoi(r.URL.Query().Get("id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	_, nivelAcceso, _, status, err := validarCookie(r)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	if nivelAcceso > 2 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("usuario debe tener nivel de acceso 2 o mayor para accesar"))
+		return
+	}
+	var res []Reporte
+	rows, err := db.Query("SELECT * FROM Reporte WHERE UsuarioId = ?", usuarioId)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var re Reporte
+		err = rows.Scan(
+			&re.Id,
+			&re.Mensaje,
+			&re.CoordenadaX,
+			&re.CoordenadaY,
+			&re.Activo,
+			&re.TipoReporte,
+			&re.UsuarioId,
+			&re.CalleId,
+			&re.DistritoId,
+		)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		res = append(res, re)
+	}
+	elJson, err := json.Marshal(res)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	w.Write(elJson)
+
+}
+func handlerGetReportesPropios(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	usuarioId, _, _, status, err := validarCookie(r)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	var res []Reporte
+	rows, err := db.Query("SELECT * FROM Reporte WHERE UsuarioId = ?", usuarioId)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var re Reporte
+		err = rows.Scan(
+			&re.Id,
+			&re.Mensaje,
+			&re.CoordenadaX,
+			&re.CoordenadaY,
+			&re.Activo,
+			&re.TipoReporte,
+			&re.UsuarioId,
+			&re.CalleId,
+			&re.DistritoId,
+		)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		res = append(res, re)
+	}
+	elJson, err := json.Marshal(res)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	w.Write(elJson)
 }
 
 func asociarHandlersReportes() {
 	http.HandleFunc("/crearReporte", handlerCrearReporte)
 	http.HandleFunc("/getReportesByDistrito", handlerGetReportesByDistrito)
 	http.HandleFunc("/getReporteById", handlerGetReporteById)
+	http.HandleFunc("/getReportesByUsuario", handlerGetReportesByUsuario)
+	http.HandleFunc("/getReportesPropios", handlerGetReportesPropios)
 }

@@ -317,14 +317,28 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 		route, d)
 	if err := row.Scan(&calleID); err != nil {
 		if err == sql.ErrNoRows {
-			db.Exec("INSERT INTO Calles (NombreCalle, DistritoId) VALUES (?,?)",
+			a, err := db.Exec("INSERT INTO Calles (NombreCalle, DistritoId) VALUES (?,?)",
 				route, d)
+			if err != nil {
+				log.Fatal(err)
+			}
+			lastinsert, err := a.LastInsertId()
+			calleID = int(lastinsert)
+			if err != nil {
+				log.Fatal(err)
+			}
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
 			return
 		}
 	}
+
+	// log.Printf("INSERT INTO Reporte"+
+	// 	"(Mensaje,CoordenadaX,CoordenadaY,TipoReporteID,UsuarioId,DistritoId,CalleId) "+
+	// 	"VALUES ('%s','%f','%f','%d','%d','%d','%d')",
+	// 	body.Mensaje, body.CoordenadaX, body.CoordenadaY, body.TipoReporte, usuarioID, d, calleID,
+	// )
 	_, err = db.Exec("INSERT INTO Reporte"+
 		"(Mensaje,CoordenadaX,CoordenadaY,TipoReporteID,UsuarioId,DistritoId,CalleId) "+
 		"VALUES (?,?,?,?,?,?,?)",

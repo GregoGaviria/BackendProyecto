@@ -1,7 +1,7 @@
 Este es el backend del proyecto, es un REST API escrito en GOLANG con una base de datos mariadb/mysql.
 
 
-##guia para correr el proyecto
+guia para correr el proyecto
 
 ・Instalar go y mysql: https://go.dev/dl/ https://dev.mysql.com/downloads/workbench/
 

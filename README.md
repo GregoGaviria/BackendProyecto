@@ -13,7 +13,9 @@ Este es el backend del proyecto, es un REST API escrito en GOLANG con una base d
 
 ・abrir una ventana de cmd en el directorio donde esta main.go
 
-・escribir el siguiente comando: go run . -a [La llave del api] -c [Usuario de db]:[Contraseña de db]@tcp([DireccionIP:Puerto])/[baseDeDatos] -j [llave De JWT]
+・escribir el siguiente comando:
 
-    ・se puede usar 127.0.0.1 para la direccion ip y el puerto default es 3306
-    ・la llave jwt puede ser cualquier string 
+    go run . -a [La llave del api] -c [Usuario de db]:[Contraseña de db]@tcp([DireccionIP:Puerto])/[baseDeDatos] -j [llave De JWT]
+
+・se puede usar 127.0.0.1 para la direccion ip y el puerto default es 3306
+・la llave jwt puede ser cualquier string 

@@ -27,8 +27,8 @@ type Reporte struct {
 	Activo      bool    `json:"activo"`
 	TipoReporte int     `json:"tipoReporte"`
 	UsuarioId   int     `json:"usuarioId"`
-	CalleId     int     `json:"calleId"`
 	DistritoId  int     `json:"distritoId"`
+	CalleId     int     `json:"calleId"`
 }
 
 type LocationError struct {
@@ -269,13 +269,82 @@ func lcsCompare(comparador string, lista []string) string {
 	return stringGanador
 }
 
+func handlerDesactivarReporte(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	usuarioId, nivelAcceso, _, s, err := validarCookie(r)
+	if s != http.StatusOK {
+		w.WriteHeader(s)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	if nivelAcceso < 2 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("usuario debe tener nivel de acceso 2 o mayor para accesar"))
+		return
+	}
+	body := struct {
+		ReporteId int `json:"reporteId"`
+	}{}
+	err = json.NewDecoder(r.Body).Decode(&body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	var distritoId int
+	var exists int
+	row := db.QueryRow("SELECT DistritoId from Reporte WHERE ReporteId = ?", body.ReporteId)
+	err = row.Scan(&distritoId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("no existe un reporte con este id"))
+			return
+		} else {
+			log.Fatal(err)
+			return
+		}
+	}
+	row = db.QueryRow(
+		"SELECT EXISTS(SELECT * FROM Usuarios_has_Distritos WHERE Distritos_DistritoId = ? AND Usuarios_UsuarioId = ?)",
+		distritoId, usuarioId,
+	)
+	err = row.Scan(&exists)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if exists != 1 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("El usuario no tiene permiso para modificar reportes en este distrito"))
+		return
+	}
+	_, err = db.Exec(
+		"UPDATE Reporte SET Activo = 0 WHERE ReporteId = ?",
+		body.ReporteId,
+	)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+}
 func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 	usuarioID, nivelAcceso, _, s, err := validarCookie(r)
-
 	if usuarioID == 0 {
 		w.WriteHeader(s)
 		if err != nil {
@@ -287,6 +356,7 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+
 	body := struct {
 		Mensaje     string  `json:"mensaje"`
 		TipoReporte int     `json:"tipoReporte"`
@@ -334,12 +404,12 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// log.Printf("INSERT INTO Reporte"+
+	// log.Printf("INSERT INTO Reporte "+
 	// 	"(Mensaje,CoordenadaX,CoordenadaY,TipoReporteID,UsuarioId,DistritoId,CalleId) "+
 	// 	"VALUES ('%s','%f','%f','%d','%d','%d','%d')",
 	// 	body.Mensaje, body.CoordenadaX, body.CoordenadaY, body.TipoReporte, usuarioID, d, calleID,
 	// )
-	_, err = db.Exec("INSERT INTO Reporte"+
+	_, err = db.Exec("INSERT INTO Reporte "+
 		"(Mensaje,CoordenadaX,CoordenadaY,TipoReporteID,UsuarioId,DistritoId,CalleId) "+
 		"VALUES (?,?,?,?,?,?,?)",
 		body.Mensaje, body.CoordenadaX, body.CoordenadaY, body.TipoReporte, usuarioID, d, calleID,
@@ -353,44 +423,166 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 	return
 
 }
-func handlerGetReportesByDistrito(w http.ResponseWriter, r *http.Request) {
+func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	distritoId, err := strconv.Atoi(r.URL.Query().Get("id"))
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	distritoId := r.URL.Query().Get("distritoId")
+	cantonId := r.URL.Query().Get("cantonId")
+	provinciaId := r.URL.Query().Get("provinciaId")
 	var res []Reporte
-	rows, err := db.Query("SELECT * FROM Reporte WHERE DistritoId = ?", distritoId)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
 
-	defer rows.Close()
+	if provinciaId != "" && distritoId == "" && cantonId == "" {
+		id, err := strconv.Atoi(provinciaId)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		rows, err := db.Query(
+			"SELECT DistritoId FROM ProvinciasCantonesView WHERE ProvinciaId = ?",
+			id,
+		)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var idD int
+			err := rows.Scan(&idD)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			rowsi, err := db.Query(
+				"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
+				idD,
+			)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			defer rowsi.Close()
+			for rowsi.Next() {
+				var re Reporte
+				err = rowsi.Scan(
+					&re.Id,
+					&re.Mensaje,
+					&re.CoordenadaX,
+					&re.CoordenadaY,
+					&re.Activo,
+					&re.TipoReporte,
+					&re.UsuarioId,
+					&re.DistritoId,
+					&re.CalleId,
+				)
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				res = append(res, re)
+			}
 
-	for rows.Next() {
-		var re Reporte
-		err = rows.Scan(
-			&re.Id,
-			&re.Mensaje,
-			&re.CoordenadaX,
-			&re.CoordenadaY,
-			&re.Activo,
-			&re.TipoReporte,
-			&re.UsuarioId,
-			&re.CalleId,
-			&re.DistritoId,
+		}
+	} else if cantonId != "" && provinciaId == "" && distritoId == "" {
+		id, err := strconv.Atoi(cantonId)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		rows, err := db.Query(
+			"SELECT DistritoId FROM Distritos WHERE CantonId = ?",
+			id,
+		)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var idD int
+			err := rows.Scan(&idD)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			rowsi, err := db.Query(
+				"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
+				idD,
+			)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			defer rowsi.Close()
+			for rowsi.Next() {
+				var re Reporte
+				err = rowsi.Scan(
+					&re.Id,
+					&re.Mensaje,
+					&re.CoordenadaX,
+					&re.CoordenadaY,
+					&re.Activo,
+					&re.TipoReporte,
+					&re.UsuarioId,
+					&re.DistritoId,
+					&re.CalleId,
+				)
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				res = append(res, re)
+			}
+
+		}
+	} else if distritoId != "" && provinciaId == "" && cantonId == "" {
+		id, err := strconv.Atoi(distritoId)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		rows, err := db.Query(
+			"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
+			id,
 		)
 		if err != nil {
 			log.Fatal(err)
 			return
 		}
-		res = append(res, re)
+		defer rows.Close()
+		for rows.Next() {
+			var re Reporte
+			err = rows.Scan(
+				&re.Id,
+				&re.Mensaje,
+				&re.CoordenadaX,
+				&re.CoordenadaY,
+				&re.Activo,
+				&re.TipoReporte,
+				&re.UsuarioId,
+				&re.DistritoId,
+				&re.CalleId,
+			)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			res = append(res, re)
+		}
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Por favor solamente llenar canton, distrito o provincia"))
+		return
+
 	}
+
 	elJson, err := json.Marshal(res)
 	if err != nil {
 		log.Fatal(err)
@@ -420,8 +612,8 @@ func handlerGetReporteById(w http.ResponseWriter, r *http.Request) {
 		&re.Activo,
 		&re.TipoReporte,
 		&re.UsuarioId,
-		&re.CalleId,
 		&re.DistritoId,
+		&re.CalleId,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -457,7 +649,7 @@ func handlerGetReportesByUsuario(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 		return
 	}
-	if nivelAcceso > 2 {
+	if nivelAcceso < 2 {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte("usuario debe tener nivel de acceso 2 o mayor para accesar"))
 		return
@@ -481,8 +673,8 @@ func handlerGetReportesByUsuario(w http.ResponseWriter, r *http.Request) {
 			&re.Activo,
 			&re.TipoReporte,
 			&re.UsuarioId,
-			&re.CalleId,
 			&re.DistritoId,
+			&re.CalleId,
 		)
 		if err != nil {
 			log.Fatal(err)
@@ -535,8 +727,8 @@ func handlerGetReportesPropios(w http.ResponseWriter, r *http.Request) {
 			&re.Activo,
 			&re.TipoReporte,
 			&re.UsuarioId,
-			&re.CalleId,
 			&re.DistritoId,
+			&re.CalleId,
 		)
 		if err != nil {
 			log.Fatal(err)
@@ -552,11 +744,83 @@ func handlerGetReportesPropios(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(elJson)
 }
+func handlerGetReportesDistritosPropios(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	usuarioID, _, _, status, err := validarCookie(r)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	var res []Reporte
+	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?", usuarioID)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var d UsuarioDistrito
+		err = rows.Scan(&d.DistritoID, &d.Distrito, &d.Canton, &d.Provincia, &d.UsuarioId)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		rowsi, err := db.Query(
+			"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
+			d.DistritoID,
+		)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		defer rowsi.Close()
+		for rowsi.Next() {
+			var re Reporte
+			err = rowsi.Scan(
+				&re.Id,
+				&re.Mensaje,
+				&re.CoordenadaX,
+				&re.CoordenadaY,
+				&re.Activo,
+				&re.TipoReporte,
+				&re.UsuarioId,
+				&re.DistritoId,
+				&re.CalleId,
+			)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			res = append(res, re)
+		}
+	}
+
+	elJson, err := json.Marshal(res)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	w.Write(elJson)
+
+}
 
 func asociarHandlersReportes() {
+	http.HandleFunc("/desactivarReporte", handlerDesactivarReporte)
 	http.HandleFunc("/crearReporte", handlerCrearReporte)
-	http.HandleFunc("/getReportesByDistrito", handlerGetReportesByDistrito)
+	http.HandleFunc("/getReportesByRegion", handlerGetReportesByRegion)
 	http.HandleFunc("/getReporteById", handlerGetReporteById)
 	http.HandleFunc("/getReportesByUsuario", handlerGetReportesByUsuario)
 	http.HandleFunc("/getReportesPropios", handlerGetReportesPropios)
+	http.HandleFunc("/getReportesDistritosPropios", handlerGetReportesDistritosPropios)
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -15,10 +16,13 @@ type Claims struct {
 	jwt.StandardClaims
 }
 
-func validarLogin(username string, password string) (cookie *http.Cookie, status int, err error) {
+func validarLogin(username string, password string) (cookie *http.Cookie, nivelAcceso int, status int, err error) {
 
 	if username == "" || password == "" {
-		return nil, http.StatusBadRequest, nil
+		return nil, 0, http.StatusBadRequest, nil
+	}
+	if password == "*" {
+		return nil, 0, http.StatusBadRequest, nil
 	}
 
 	// expectedPassword, err := getPasswordById(cedula)
@@ -28,14 +32,13 @@ func validarLogin(username string, password string) (cookie *http.Cookie, status
 	// }
 
 	var userID int
-	var nivelAcceso int
 	var expectedPassword string
 
 	row := db.QueryRow("SELECT UsuarioId, NivelAcceso, Password FROM Usuarios WHERE Username=?", username)
 	err = row.Scan(&userID, &nivelAcceso, &expectedPassword)
 
 	if err != nil || password != expectedPassword {
-		return nil, http.StatusUnauthorized, err
+		return nil, 0, http.StatusUnauthorized, err
 	}
 
 	expirationTime := time.Now().Add(time.Minute * 60)
@@ -51,14 +54,14 @@ func validarLogin(username string, password string) (cookie *http.Cookie, status
 	var token *jwt.Token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenstring, err := token.SignedString(jwtKey)
 	if err != nil {
-		return nil, http.StatusInternalServerError, err
+		return nil, 0, http.StatusInternalServerError, err
 	}
 	cookie = &http.Cookie{
 		Name:    "token",
 		Value:   tokenstring,
 		Expires: expirationTime,
 	}
-	return cookie, http.StatusOK, err
+	return cookie, nivelAcceso, http.StatusOK, err
 
 }
 func validarCookie(r *http.Request) (usuarioID int, nivelAcceso int, Username string, status int, err error) {
@@ -118,7 +121,7 @@ func handlerSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cookie, status, err := validarLogin(u.Username, u.Password)
+	cookie, nivelAcceso, status, err := validarLogin(u.Username, u.Password)
 	if cookie == nil {
 		w.WriteHeader(status)
 		w.Write([]byte(err.Error()))
@@ -126,6 +129,7 @@ func handlerSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, cookie)
+	w.Write(fmt.Appendf(nil, "{\"nivelAcceso\":%d}", nivelAcceso))
 }
 func handlerLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -139,7 +143,7 @@ func handlerLogin(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
-	cookie, status, err := validarLogin(u.Username, u.Password)
+	cookie, nivelAcceso, status, err := validarLogin(u.Username, u.Password)
 	if cookie == nil {
 		w.WriteHeader(status)
 		w.Write([]byte(err.Error()))
@@ -147,6 +151,7 @@ func handlerLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, cookie)
+	w.Write(fmt.Appendf(nil, "{\"nivelAcceso\":%d}", nivelAcceso))
 
 }
 

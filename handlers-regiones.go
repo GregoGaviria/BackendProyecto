@@ -143,8 +143,14 @@ func handlerGetDistritoById(w http.ResponseWriter, r *http.Request) {
 	row := db.QueryRow("SELECT * FROM Distritos WHERE DistritoId = ?", distritoId)
 	err = row.Scan(&d.Id, &d.NombreDistrito, &d.IdCanton)
 	if err != nil {
-		log.Fatal(err)
-		return
+		if err == sql.ErrNoRows {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("no existe un distrito con este id"))
+			return
+		} else {
+			log.Fatal(err)
+			return
+		}
 	}
 	elJson, err := json.Marshal(d)
 	if err != nil {
@@ -168,8 +174,14 @@ func handlerGetCantonById(w http.ResponseWriter, r *http.Request) {
 	row := db.QueryRow("SELECT * FROM Cantones WHERE CantonId = ?", cantonId)
 	err = row.Scan(&c.Id, &c.NombreCanton, &c.IdProvincia)
 	if err != nil {
-		log.Fatal(err)
-		return
+		if err == sql.ErrNoRows {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("no existe un canton con este id"))
+			return
+		} else {
+			log.Fatal(err)
+			return
+		}
 	}
 	elJson, err := json.Marshal(c)
 	if err != nil {
@@ -196,6 +208,7 @@ func handlerGetProvinciaById(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("no existe una provincia con este id"))
 			return
 		} else {
 			log.Fatal(err)

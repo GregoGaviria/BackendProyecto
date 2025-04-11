@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -23,12 +25,6 @@ type UsuarioDistrito struct {
 }
 
 func handlerEliminarUsuario(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-func handlerEliminarUsuarioPropio(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-func handlerAsociarDistrito(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -45,7 +41,99 @@ func handlerAsociarDistrito(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 		return
 	}
-	if nivelAcceso > 3 {
+	if nivelAcceso < 3 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
+		return
+	}
+	body := struct {
+		UsuarioId int `json:"usuarioId"`
+	}{}
+	err = json.NewDecoder(r.Body).Decode(&body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	_, err = db.Exec(
+		"DELETE FROM Usuarios_has_Distritos WHERE Usuarios_UsuarioId = ?",
+		body.UsuarioId,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = db.Exec(
+		"UPDATE Reporte SET UsuarioId = 1 WHERE UsuarioId = ?",
+		body.UsuarioId,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = db.Exec(
+		"DELETE FROM Usuarios WHERE UsuarioId = ?",
+		body.UsuarioId,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+func handlerEliminarUsuarioPropio(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	usuarioID, _, _, status, err := validarCookie(r)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	_, err = db.Exec(
+		"DELETE FROM Usuarios_has_Distritos WHERE Usuarios_UsuarioId = ?",
+		usuarioID,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = db.Exec(
+		"UPDATE Reporte SET UsuarioId = 1 WHERE UsuarioId = ?",
+		usuarioID,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = db.Exec(
+		"DELETE FROM Usuarios WHERE UsuarioId = ?",
+		usuarioID,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+func handlerAsociarRegion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	_, nivelAcceso, _, s, err := validarCookie(r)
+	if s != http.StatusOK {
+		w.WriteHeader(s)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	if nivelAcceso < 3 {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
 		return
@@ -125,15 +213,121 @@ func handlerAsociarDistrito(w http.ResponseWriter, r *http.Request) {
 			return
 
 		}
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Por favor solamente llenar canton, distrito o provincia"))
+		return
 	}
 
 }
-
 func handlerEliminarAsociacion(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	_, nivelAcceso, _, s, err := validarCookie(r)
+	if s != http.StatusOK {
+		w.WriteHeader(s)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	if nivelAcceso < 3 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
+		return
+	}
+	body := struct {
+		UsuarioId   int `json:"usuarioId"`
+		DistritoId  int `json:"distritoId"`
+		CantonId    int `json:"cantonId"`
+		ProvinciaId int `json:"provinciaId"`
+	}{}
+	err = json.NewDecoder(r.Body).Decode(&body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	var res sql.Result
+	if body.ProvinciaId != 0 && body.DistritoId == 0 && body.CantonId == 0 {
+		res, err = db.Exec(
+			"DELETE FROM Usuarios_has_Distritos "+
+				"WHERE Usuarios_UsuarioId = ? AND Distritos_DistritoId LIKE ?",
+			body.UsuarioId, fmt.Sprintf("%d____", body.ProvinciaId),
+		)
+	} else if body.CantonId != 0 && body.DistritoId == 0 && body.ProvinciaId == 0 {
+		res, err = db.Exec(
+			"DELETE FROM Usuarios_has_Distritos "+
+				"WHERE Usuarios_UsuarioId = ? AND Distritos_DistritoId LIKE ?",
+			body.UsuarioId, fmt.Sprintf("%d__", body.CantonId),
+		)
+	} else if body.DistritoId != 0 && body.CantonId == 0 && body.ProvinciaId == 0 {
+		res, err = db.Exec(
+			"DELETE FROM Usuarios_has_Distritos "+
+				"WHERE Usuarios_UsuarioId = ? AND Distritos_DistritoId = ?",
+			body.UsuarioId, body.DistritoId,
+		)
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Por favor solamente llenar canton, distrito o provincia"))
+		return
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	rowsaffected, err := res.RowsAffected()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	if rowsaffected == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("no se encontro ninguna asociacion con el id regional proveido, por favor revisar el id enviado e intentar otra vez"))
+	}
 }
 func handlerEliminarAsociacionTodas(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	_, nivelAcceso, _, s, err := validarCookie(r)
+	if s != http.StatusOK {
+		w.WriteHeader(s)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	if nivelAcceso < 3 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
+		return
+	}
+	body := struct {
+		UsuarioId int `json:"usuarioId"`
+	}{}
+	err = json.NewDecoder(r.Body).Decode(&body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	_, err = db.Exec(
+		"DELETE FROM Usuarios_has_Distritos WHERE Usuarios_UsuarioId = ?",
+		body.UsuarioId,
+	)
 }
 func handlerCambiarNivelAcceso(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -152,7 +346,7 @@ func handlerCambiarNivelAcceso(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 		return
 	}
-	if nivelAcceso > 3 {
+	if nivelAcceso < 3 {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
 		return
@@ -177,7 +371,8 @@ func handlerCambiarNivelAcceso(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec("UPDATE Usuarios SET NivelAcceso = ? WHERE UsuarioId = ?",
+	_, err = db.Exec(
+		"UPDATE Usuarios SET NivelAcceso = ? WHERE UsuarioId = ?",
 		body.NivelAccesoDeseado, body.UsuarioId,
 	)
 	if err != nil {
@@ -189,7 +384,6 @@ func handlerCambiarNivelAcceso(w http.ResponseWriter, r *http.Request) {
 
 }
 func handlerGetDistritosByUsuario(w http.ResponseWriter, r *http.Request) {
-
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -212,14 +406,14 @@ func handlerGetDistritosByUsuario(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 		return
 	}
-	if nivelAcceso > 2 {
+	if nivelAcceso < 2 {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte("usuario debe tener nivel de acceso 2 o mayor para accesar"))
 		return
 	}
 
 	var distritos []UsuarioDistrito
-	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE Usuarios_UsuarioId = ?", usuarioID)
+	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?", usuarioID)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -284,11 +478,63 @@ func handlerGetDistritosPropios(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(elJson)
 }
+func handlerBuscarUsuarios(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	usuarioID := r.URL.Query().Get("usuario")
+	_, nivelAcceso, _, status, err := validarCookie(r)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else if err != nil {
+		log.Println("No se como paso esto (yupi!!!!)")
+		log.Fatal(err)
+		return
+	}
+	if nivelAcceso < 3 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
+		return
+	}
+	var usuarios []Usuario
+	rows, err := db.Query("SELECT * FROM Usuarios WHERE Username LIKE ?", "%"+usuarioID+"%")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var u Usuario
+		var basurero string
+		err := rows.Scan(&u.UserID, &u.NivelAcceso, &u.Username, &basurero)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		if u.UserID != 1 {
+			usuarios = append(usuarios, u)
+		}
+	}
+	elJson, err := json.Marshal(usuarios)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	w.Write(elJson)
+
+}
 
 func asociarHandlersUsuarios() {
+	http.HandleFunc("/buscarUsuarios", handlerBuscarUsuarios)
 	http.HandleFunc("/eliminarUsuario", handlerEliminarUsuario)
 	http.HandleFunc("/eliminarUsuarioPropio", handlerEliminarUsuarioPropio)
-	http.HandleFunc("/asociarDistrito", handlerAsociarDistrito)
+	http.HandleFunc("/asociarRegion", handlerAsociarRegion)
 	http.HandleFunc("/cambiarNivelAcceso", handlerCambiarNivelAcceso)
 	http.HandleFunc("/getDistritosByUsuario", handlerGetDistritosByUsuario)
 	http.HandleFunc("/getDistritosPropios", handlerGetDistritosPropios)

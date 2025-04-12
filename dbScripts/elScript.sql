@@ -781,9 +781,9 @@ INSERT INTO TipoReporte VALUES (6,"Otro");
 --en areas rurales de guanacaste es comun que la gente use caballos como transporte
 INSERT INTO TipoReporte Values (7,"Caballo Muerto Bloqueando Calle");
 INSERT INTO TipoReporte Values (8,"Vehiculo Bloqueando Calle");
-INSERT INTO Usuarios_has_Distritos VALUES (2,10201);
-INSERT INTO Usuarios_has_Distritos VALUES (2,10202);
-INSERT INTO Usuarios_has_Distritos VALUES (2,10203);
+INSERT INTO Usuarios_has_Distritos VALUES (3,10201);
+INSERT INTO Usuarios_has_Distritos VALUES (3,10202);
+INSERT INTO Usuarios_has_Distritos VALUES (3,10203);
 DROP VIEW IF EXISTS `mydb`.`UsuariosDistritosView`;
 
 CREATE VIEW IF NOT EXISTS `UsuariosDistritosView` AS 

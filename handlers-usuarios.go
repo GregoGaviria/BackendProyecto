@@ -3,10 +3,13 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 type Usuario struct {
@@ -171,9 +174,13 @@ func handlerAsociarRegion(w http.ResponseWriter, r *http.Request) {
 			_, err = db.Exec("INSERT Usuarios_has_Distritos VALUES (?,?)",
 				body.UsuarioId, id,
 			)
+			var mysqlErr *mysql.MySQLError
 			if err != nil {
-				log.Fatal(err)
-				return
+				if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+				} else {
+					log.Fatal(err)
+					return
+				}
 			}
 		}
 
@@ -197,9 +204,13 @@ func handlerAsociarRegion(w http.ResponseWriter, r *http.Request) {
 			_, err = db.Exec("INSERT Usuarios_has_Distritos VALUES (?,?)",
 				body.UsuarioId, id,
 			)
+			var mysqlErr *mysql.MySQLError
 			if err != nil {
-				log.Fatal(err)
-				return
+				if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+				} else {
+					log.Fatal(err)
+					return
+				}
 			}
 		}
 
@@ -211,7 +222,6 @@ func handlerAsociarRegion(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(err.Error()))
 			return
-
 		}
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
@@ -370,7 +380,20 @@ func handlerCambiarNivelAcceso(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("el usuario asignador debe tener un nivel de acceso de 4 para hacer esta accion"))
 		return
 	}
-
+	var nivelAccesoUsuario int
+	row := db.QueryRow("SELECT NivelAcceso FROM Usuarios WHERE UsuarioId = ?", body.UsuarioId)
+	err = row.Scan(&nivelAccesoUsuario)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	if nivelAccesoUsuario >= 3 && nivelAcceso == 3 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(
+			"usuario con nivel de acceso 3 no puede cambiar" +
+				" el nivel de un usuario con nivel de acceso mayor a 2",
+		))
+	}
 	_, err = db.Exec(
 		"UPDATE Usuarios SET NivelAcceso = ? WHERE UsuarioId = ?",
 		body.NivelAccesoDeseado, body.UsuarioId,
@@ -455,7 +478,7 @@ func handlerGetDistritosPropios(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var distritos []UsuarioDistrito
-	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE Usuarios_UsuarioId = ?", usuarioID)
+	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?", usuarioID)
 	if err != nil {
 		log.Fatal(err)
 		return

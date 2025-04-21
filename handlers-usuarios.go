@@ -12,41 +12,13 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-type Usuario struct {
-	UserID      int
-	NivelAcceso int
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-}
-
-type UsuarioDistrito struct {
-	DistritoID int    `json:"distritoID"`
-	Distrito   string `json:"distrito"`
-	Canton     string `json:"canton"`
-	Provincia  string `json:"provincia"`
-	UsuarioId  int    `json:"usuarioId"`
-}
-
 func handlerEliminarUsuario(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	_, nivelAcceso, _, s, err := validarCookie(r)
-	if s != http.StatusOK {
-		w.WriteHeader(s)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 3 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
+	_, nivelAcceso, err := authWrapper(r, w, 3)
+	if err != nil {
 		return
 	}
 	body := struct {
@@ -56,6 +28,17 @@ func handlerEliminarUsuario(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
+		return
+	}
+	row := db.QueryRow(
+		"SELECT NivelAcceso FROM Usuarios WHERE UsuarioId = ?",
+		body.UsuarioId,
+	)
+	var nivelAccesoU int
+	row.Scan(&nivelAccesoU)
+	if nivelAccesoU >= 3 && nivelAcceso == 3 {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("usuario debe tener un nivel de acceso de 4 para hacer esta accion"))
 		return
 	}
 	_, err = db.Exec(
@@ -85,18 +68,7 @@ func handlerEliminarUsuarioPropio(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	usuarioID, _, _, status, err := validarCookie(r)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
+	usuarioID, _, err := authWrapper(r, w, 0)
 	_, err = db.Exec(
 		"DELETE FROM Usuarios_has_Distritos WHERE Usuarios_UsuarioId = ?",
 		usuarioID,
@@ -124,21 +96,8 @@ func handlerAsociarRegion(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	_, nivelAcceso, _, s, err := validarCookie(r)
-	if s != http.StatusOK {
-		w.WriteHeader(s)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 3 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
+	_, _, err := authWrapper(r, w, 3)
+	if err != nil {
 		return
 	}
 	body := struct {
@@ -235,23 +194,7 @@ func handlerEliminarAsociacion(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	_, nivelAcceso, _, s, err := validarCookie(r)
-	if s != http.StatusOK {
-		w.WriteHeader(s)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 3 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
-		return
-	}
+	_, _, err := authWrapper(r, w, 3)
 	body := struct {
 		UsuarioId   int `json:"usuarioId"`
 		DistritoId  int `json:"distritoId"`
@@ -308,23 +251,7 @@ func handlerEliminarAsociacionTodas(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	_, nivelAcceso, _, s, err := validarCookie(r)
-	if s != http.StatusOK {
-		w.WriteHeader(s)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 3 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
-		return
-	}
+	_, _, err := authWrapper(r, w, 3)
 	body := struct {
 		UsuarioId int `json:"usuarioId"`
 	}{}
@@ -344,21 +271,8 @@ func handlerCambiarNivelAcceso(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	_, nivelAcceso, _, s, err := validarCookie(r)
-	if s != http.StatusOK {
-		w.WriteHeader(s)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 3 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
+	_, nivelAcceso, err := authWrapper(r, w, 3)
+	if err != nil {
 		return
 	}
 	body := struct {
@@ -402,7 +316,6 @@ func handlerCambiarNivelAcceso(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
 		return
-
 	}
 
 }
@@ -411,95 +324,37 @@ func handlerGetDistritosByUsuario(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	_, _, err := authWrapper(r, w, 3)
+	if err != nil {
+		return
+	}
 	usuarioID, err := strconv.Atoi(r.URL.Query().Get("usuario"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
 		return
 	}
-	_, nivelAcceso, _, status, err := validarCookie(r)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 2 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 2 o mayor para accesar"))
-		return
-	}
 
-	var distritos []UsuarioDistrito
-	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?", usuarioID)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var d UsuarioDistrito
-		err := rows.Scan(&d.DistritoID, &d.Distrito, &d.Canton, &d.Provincia, &d.UsuarioId)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		distritos = append(distritos, d)
-	}
-	elJson, err := json.Marshal(distritos)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
+	distritos := querryWrapper[UsuarioDistrito](
+		"SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?",
+		usuarioID,
+	)
+	jsonWrapper(distritos, w)
 }
 func handlerGetDistritosPropios(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	usuarioID, _, _, status, err := validarCookie(r)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-
-	var distritos []UsuarioDistrito
-	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?", usuarioID)
+	usuarioID, _, err := authWrapper(r, w, 0)
 	if err != nil {
-		log.Fatal(err)
 		return
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var d UsuarioDistrito
-		err := rows.Scan(&d.DistritoID, &d.Distrito, &d.Canton, &d.Provincia, &d.UsuarioId)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		distritos = append(distritos, d)
-	}
-	elJson, err := json.Marshal(distritos)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
+	distritos := querryWrapper[UsuarioDistrito](
+		"SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?",
+		usuarioID,
+	)
+	jsonWrapper(distritos, w)
 }
 func handlerBuscarUsuarios(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -507,50 +362,15 @@ func handlerBuscarUsuarios(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	usuarioID := r.URL.Query().Get("usuario")
-	_, nivelAcceso, _, status, err := validarCookie(r)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 3 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 3 o mayor para accesar"))
-		return
-	}
-	var usuarios []Usuario
-	rows, err := db.Query("SELECT * FROM Usuarios WHERE Username LIKE ?", "%"+usuarioID+"%")
+	_, _, err := authWrapper(r, w, 3)
 	if err != nil {
-		log.Fatal(err)
 		return
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var u Usuario
-		var basurero string
-		err := rows.Scan(&u.UserID, &u.NivelAcceso, &u.Username, &basurero)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		if u.UserID != 1 {
-			usuarios = append(usuarios, u)
-		}
-	}
-	elJson, err := json.Marshal(usuarios)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
-
+	usuarios := querryWrapper[Usuario](
+		"SELECT * FROM Usuarios WHERE Username LIKE ?",
+		"%"+usuarioID+"%",
+	)
+	jsonWrapper(usuarios, w)
 }
 
 func asociarHandlersUsuarios() {

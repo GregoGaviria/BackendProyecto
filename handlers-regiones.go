@@ -2,65 +2,30 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
 )
-
-type Distrito struct {
-	Id             int    `json:"id"`
-	IdCanton       int    `json:"idCanton"`
-	NombreDistrito string `json:"nombreDistrito"`
-}
-type Canton struct {
-	Id           int    `json:"id"`
-	IdProvincia  int    `json:"idProvincia"`
-	NombreCanton string `json:"nombreCanton"`
-}
-type Provincia struct {
-	Id             int    `json:"id"`
-	NombreProvicia string `json:"nombreProvincia"`
-}
 
 func handlerGetDistritosByCanton(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	var canton int
+	//consigue el valor de la variable en el url
+	//si no se encuentra retorna badrequest
 	canton, err := strconv.Atoi(r.URL.Query().Get("Canton"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	var distritos []Distrito
-	rows, err := db.Query("SELECT * FROM Distritos WHERE Cantonid = ?", canton)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var d Distrito
-		err := rows.Scan(&d.Id, &d.NombreDistrito, &d.IdCanton)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		distritos = append(distritos, d)
-	}
-	elJson, err := json.Marshal(distritos)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
-
+	//utiliza el querryWrapper para devolver los datos
+	distritos := querryWrapper[Distrito](
+		"SELECT * FROM Distritos WHERE Cantonid = ?",
+		canton,
+	)
+	//utiliza el jsonWrapper para enviar los datos
+	jsonWrapper(distritos, w)
 }
 func handlerGetCantonesByProvincia(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -73,62 +38,20 @@ func handlerGetCantonesByProvincia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var cantones []Canton
-	rows, err := db.Query("SELECT * FROM Cantones WHERE Provinciaid = ?", provincia)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var c Canton
-		err := rows.Scan(&c.Id, &c.NombreCanton, &c.IdProvincia)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		cantones = append(cantones, c)
-	}
-	elJson, err := json.Marshal(cantones)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
-
+	cantones := querryWrapper[Canton](
+		"SELECT * FROM Cantones WHERE Provinciaid = ?",
+		provincia,
+	)
+	jsonWrapper(cantones, w)
 }
 func handlerGetProvincias(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
-	var provincias []Provincia
-	rows, err := db.Query("SELECT * FROM Provincias")
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var p Provincia
-		err := rows.Scan(&p.Id, &p.NombreProvicia)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		provincias = append(provincias, p)
-	}
-	elJson, err := json.Marshal(provincias)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
-
+	provincias := querryWrapper[Provincia]("SELECT * FROM Provincias")
+	jsonWrapper(provincias, w)
 }
 func handlerGetDistritoById(w http.ResponseWriter, r *http.Request) {
-
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -152,12 +75,7 @@ func handlerGetDistritoById(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	elJson, err := json.Marshal(d)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	w.Write(elJson)
+	jsonWrapper(d, w)
 }
 func handlerGetCantonById(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -183,12 +101,7 @@ func handlerGetCantonById(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	elJson, err := json.Marshal(c)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	w.Write(elJson)
+	jsonWrapper(c, w)
 
 }
 func handlerGetProvinciaById(w http.ResponseWriter, r *http.Request) {
@@ -215,13 +128,7 @@ func handlerGetProvinciaById(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	elJson, err := json.Marshal(p)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	w.Write(elJson)
-
+	jsonWrapper(p, w)
 }
 
 func asociarHandlersRegiones() {

@@ -19,18 +19,6 @@ import (
 	"googlemaps.github.io/maps"
 )
 
-type Reporte struct {
-	Id          int     `json:"id"`
-	Mensaje     string  `json:"mensaje"`
-	CoordenadaX float32 `json:"coordenadaX"`
-	CoordenadaY float32 `json:"coordenadaY"`
-	Activo      bool    `json:"activo"`
-	TipoReporte int     `json:"tipoReporte"`
-	UsuarioId   int     `json:"usuarioId"`
-	DistritoId  int     `json:"distritoId"`
-	CalleId     int     `json:"calleId"`
-}
-
 type LocationError struct {
 	Msg                  string
 	LocalizacionEsperada string
@@ -41,22 +29,35 @@ func (e *LocationError) Error() string {
 	return e.Msg
 }
 
+// funcion que convierte las coordenadas xy a un canton, distrito, y calle
 func reverseGeocodeRequest(y float64, x float64) (d int, c int, p int, r string, err error) {
+
+	//genera una estructura de un GeocodingRequest de google maps
+	//contiene coordenadas xy y pide que retorne los datos en español
+	//si no esta en español los nombres retornados no van a poder ser asociados con los nombres
+	//en la base de datos
+	req := &maps.GeocodingRequest{
+		LatLng:   &maps.LatLng{Lat: y, Lng: x},
+		Language: "es",
+	}
+	//hace el request a google maps y retorna la respuesta.
+	response, err := mapClient.ReverseGeocode(context.Background(), req)
+	if err != nil {
+		return 0, 0, 0, "", err
+	}
+
 	var resultadoDistrito *maps.GeocodingResult
 	var resultadoCanton *maps.GeocodingResult
 	var resultadoProvincia *maps.GeocodingResult
 	var resultadoRoute *maps.GeocodingResult
 	var resultadoCountry *maps.GeocodingResult
 
-	req := &maps.GeocodingRequest{
-		LatLng:   &maps.LatLng{Lat: y, Lng: x},
-		Language: "es",
-	}
-	response, err := mapClient.ReverseGeocode(context.Background(), req)
-	if err != nil {
-		return 0, 0, 0, "", err
-	}
-
+	//La respuesta contiene una lista con diferentes nombres de localizaciones
+	//que aplican a las coordenadas provisionadas
+	//por ejemplo puede contener un resultado que contenga el nombre de la calle,
+	//otro que contenga el nombre de un edificio cercano,
+	//y otros donde se encuentran los niveles administrativos.
+	//este for loop le asigna el resultado relevante a las variables dclaradas previamente
 	for i := range response {
 		for _, f := range response[i].Types {
 			switch f {
@@ -87,18 +88,17 @@ func reverseGeocodeRequest(y float64, x float64) (d int, c int, p int, r string,
 	}
 	r = strings.Split(resultadoRoute.FormattedAddress, ",")[0]
 
-	// log.Println("")
-	// log.Println("Provincia")
-	// log.Println(resultadoProvincia.FormattedAddress)
-	// log.Println("")
-	// log.Println("Canton")
-	// log.Println(resultadoCanton.FormattedAddress)
-	// log.Println("")
-	// log.Println("Distrito")
-	// log.Println(resultadoDistrito.FormattedAddress)
-	// log.Println("")
-
-	querryWrapper := func(q string, arg int, r *maps.GeocodingResult, splitint int) (int, error) {
+	//un wrapper para convertir el el geocodingResult a un id
+	//de la subdivision politica relevante.
+	//recibe el query y el argumento que lleva el querry como un argumento.
+	geocodingQuerryWrapper := func(
+		q string,
+		arg int,
+		r *maps.GeocodingResult,
+		splitint int,
+	) (int, error) {
+		//si no se envia un argumento se corre db.querry sin argumentos
+		//y vice versa
 		var rows *sql.Rows
 		var err error
 		if arg != 0 {
@@ -106,19 +106,26 @@ func reverseGeocodeRequest(y float64, x float64) (d int, c int, p int, r string,
 		} else {
 			rows, err = db.Query(q)
 		}
+
 		if err != nil {
 			return 0, err
 		}
+		//cierra los rows al terminar de correr la funcion
 		defer rows.Close()
 
 		var nombres []string
+		// se genera un map (similar a un diccionario de mapa)
+		//en este mapa la llave es un string y el valor es un int
 		m := make(map[string]int)
 		for rows.Next() {
 			var sr string
 			var intr int
 			var basurero int
+			// se guardan los valores de el row en las variables declaradas previamente
 			err := rows.Scan(&intr, &sr)
 			if err != nil {
+				// en el caso que se retornen 3 valores el tercero se guarda en la variable
+				// basurero, ya que no es necesaria.
 				if err.Error() == "sql: expected 3 destination arguments in Scan, not 2" {
 					err = rows.Scan(&intr, &sr, &basurero)
 				} else {
@@ -126,17 +133,27 @@ func reverseGeocodeRequest(y float64, x float64) (d int, c int, p int, r string,
 				}
 			}
 
+			//se aplica la funcion de normalizar para
+			//facilitar la comparación de los strings
 			sr, err = normalize(sr)
 			if err != nil {
 				return 0, err
 			}
 
+			//se guarda el valor del id dentro del map con la llave del nombre de la region
 			m[sr] = intr
+			//se guarda el nombre de la region en la lista de los nombres
 			nombres = append(nombres, sr)
 		}
 
+		//el string que contiene la direccion contiene varios elementos partidos por strings
+		//con esta funcion podemos generar una lista de los strings partidos por comas en el request
 		resultSplit := strings.Split(r.FormattedAddress, ",")
 		var nsplit string
+		//el parametro splitint determina cual elemnento de el
+		//contnido de formattedAddres se quiere extraer
+		//si intsplit es negativo se agarra el numero empezando de la derecha
+		//adicionalmente se normalizan los valores
 		if splitint < 0 {
 			nsplit, err = normalize(resultSplit[len(resultSplit)+splitint])
 		} else {
@@ -145,39 +162,49 @@ func reverseGeocodeRequest(y float64, x float64) (d int, c int, p int, r string,
 		if err != nil {
 			return 0, err
 		}
+		//se busca el valor de el id de la region utilizando el resultado de el request
 		p := m[nsplit]
 		if p != 0 {
+			// si se encuentra imediatamente se retorna
 			return p, nil
 		}
-
+		//si no se encuentra se encuentra la opcion mas cercana con lcsCompare
 		log.Printf("no se encontro un resultado exacto con '%s', ejecutando LCS", nsplit)
 		resultadoProvinciaComparada := lcsCompare(nsplit, nombres)
-		// p.NombreProvicia = resultadoProvinciaComparada
 		p = m[resultadoProvinciaComparada]
 		return p, nil
 
 	}
-	p, err = querryWrapper("SELECT * FROM Provincias", 0, resultadoProvincia, 0)
+	//se busca la provincia del request
+	p, err = geocodingQuerryWrapper("SELECT * FROM Provincias", 0, resultadoProvincia, 0)
 	if err != nil {
 		return 0, 0, 0, "", err
 	}
-	c, err = querryWrapper("SELECT * FROM Cantones WHERE Provinciaid = ?", p, resultadoCanton, -2)
+	//se busca el canton de el request, restringido a la provincia
+	c, err = geocodingQuerryWrapper("SELECT * FROM Cantones WHERE Provinciaid = ?", p, resultadoCanton, -2)
 	if err != nil {
 		return 0, 0, 0, "", err
 	}
-	d, err = querryWrapper("SELECT * FROM Distritos WHERE Cantonid = ?", c, resultadoDistrito, 0)
+	//se busca el distrito de el request, restringido a el canton
+	d, err = geocodingQuerryWrapper("SELECT * FROM Distritos WHERE Cantonid = ?", c, resultadoDistrito, 0)
 	if err != nil {
 		return 0, 0, 0, "", err
 	}
 	return d, c, p, r, err
 
 }
+
+// funcion para normalizar valores al eliminar caractreres especiales,
+// mayusculas, y strings que interfieren
 func normalize(s string) (string, error) {
+	//codigo para generar un transformador que elimina los elementos especiales de los caracteres(tildes, ect)
 	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	//se utiliza el transformador para transformar el string parametro
 	result, _, err := transform.String(t, s)
 	if err != nil {
 		return "", err
 	}
+	//se eliminan las mayusculas
 	result = strings.ToLower(result)
 	//aqui uno pone los prefijos que pueden interferir con el programa
 	listaPrefijosDelMal := []string{"provincia de ", " "}
@@ -274,23 +301,7 @@ func handlerDesactivarReporte(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	usuarioId, nivelAcceso, _, s, err := validarCookie(r)
-	if s != http.StatusOK {
-		w.WriteHeader(s)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 2 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 2 o mayor para accesar"))
-		return
-	}
+	usuarioId, _, err := authWrapper(r, w, 2)
 	body := struct {
 		ReporteId int `json:"reporteId"`
 	}{}
@@ -344,18 +355,7 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	usuarioID, nivelAcceso, _, s, err := validarCookie(r)
-	if usuarioID == 0 {
-		w.WriteHeader(s)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	}
-	if nivelAcceso == 0 {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
+	usuarioID, _, err := authWrapper(r, w, 1)
 
 	body := struct {
 		Mensaje     string  `json:"mensaje"`
@@ -404,11 +404,6 @@ func handlerCrearReporte(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// log.Printf("INSERT INTO Reporte "+
-	// 	"(Mensaje,CoordenadaX,CoordenadaY,TipoReporteID,UsuarioId,DistritoId,CalleId) "+
-	// 	"VALUES ('%s','%f','%f','%d','%d','%d','%d')",
-	// 	body.Mensaje, body.CoordenadaX, body.CoordenadaY, body.TipoReporte, usuarioID, d, calleID,
-	// )
 	_, err = db.Exec("INSERT INTO Reporte "+
 		"(Mensaje,CoordenadaX,CoordenadaY,TipoReporteID,UsuarioId,DistritoId,CalleId) "+
 		"VALUES (?,?,?,?,?,?,?)",
@@ -431,7 +426,7 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 	distritoId := r.URL.Query().Get("distritoId")
 	cantonId := r.URL.Query().Get("cantonId")
 	provinciaId := r.URL.Query().Get("provinciaId")
-	var res []Reporte
+	var res []*Reporte
 
 	if provinciaId != "" && distritoId == "" && cantonId == "" {
 		id, err := strconv.Atoi(provinciaId)
@@ -457,35 +452,11 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 				log.Fatal(err)
 				return
 			}
-			rowsi, err := db.Query(
+			i := querryWrapper[Reporte](
 				"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
 				idD,
 			)
-			if err != nil {
-				log.Fatal(err)
-				return
-			}
-			defer rowsi.Close()
-			for rowsi.Next() {
-				var re Reporte
-				err = rowsi.Scan(
-					&re.Id,
-					&re.Mensaje,
-					&re.CoordenadaX,
-					&re.CoordenadaY,
-					&re.Activo,
-					&re.TipoReporte,
-					&re.UsuarioId,
-					&re.DistritoId,
-					&re.CalleId,
-				)
-				if err != nil {
-					log.Fatal(err)
-					return
-				}
-				res = append(res, re)
-			}
-
+			res = append(res, i...)
 		}
 	} else if cantonId != "" && provinciaId == "" && distritoId == "" {
 		id, err := strconv.Atoi(cantonId)
@@ -511,35 +482,11 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 				log.Fatal(err)
 				return
 			}
-			rowsi, err := db.Query(
+			i := querryWrapper[Reporte](
 				"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
 				idD,
 			)
-			if err != nil {
-				log.Fatal(err)
-				return
-			}
-			defer rowsi.Close()
-			for rowsi.Next() {
-				var re Reporte
-				err = rowsi.Scan(
-					&re.Id,
-					&re.Mensaje,
-					&re.CoordenadaX,
-					&re.CoordenadaY,
-					&re.Activo,
-					&re.TipoReporte,
-					&re.UsuarioId,
-					&re.DistritoId,
-					&re.CalleId,
-				)
-				if err != nil {
-					log.Fatal(err)
-					return
-				}
-				res = append(res, re)
-			}
-
+			res = append(res, i...)
 		}
 	} else if distritoId != "" && provinciaId == "" && cantonId == "" {
 		id, err := strconv.Atoi(distritoId)
@@ -548,34 +495,10 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(err.Error()))
 			return
 		}
-		rows, err := db.Query(
+		res = querryWrapper[Reporte](
 			"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
 			id,
 		)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var re Reporte
-			err = rows.Scan(
-				&re.Id,
-				&re.Mensaje,
-				&re.CoordenadaX,
-				&re.CoordenadaY,
-				&re.Activo,
-				&re.TipoReporte,
-				&re.UsuarioId,
-				&re.DistritoId,
-				&re.CalleId,
-			)
-			if err != nil {
-				log.Fatal(err)
-				return
-			}
-			res = append(res, re)
-		}
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Por favor solamente llenar canton, distrito o provincia"))
@@ -583,13 +506,7 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	elJson, err := json.Marshal(res)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
+	jsonWrapper(res, w)
 }
 func handlerGetReporteById(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -604,28 +521,9 @@ func handlerGetReporteById(w http.ResponseWriter, r *http.Request) {
 
 	var re Reporte
 	row := db.QueryRow("SELECT * FROM Reporte WHERE ReporteId = ?", reporteId)
-	err = row.Scan(
-		&re.Id,
-		&re.Mensaje,
-		&re.CoordenadaX,
-		&re.CoordenadaY,
-		&re.Activo,
-		&re.TipoReporte,
-		&re.UsuarioId,
-		&re.DistritoId,
-		&re.CalleId,
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	elJson, err := json.Marshal(re)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
+	re.populate(row)
 
-	w.Write(elJson)
-
+	jsonWrapper(re, w)
 }
 func handlerGetReportesByUsuario(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -637,51 +535,14 @@ func handlerGetReportesByUsuario(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	_, nivelAcceso, _, status, err := validarCookie(r)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	if nivelAcceso < 2 {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("usuario debe tener nivel de acceso 2 o mayor para accesar"))
-		return
-	}
-	var res []Reporte
-	rows, err := db.Query("SELECT * FROM Reporte WHERE UsuarioId = ?", usuarioId)
+	_, _, err = authWrapper(r, w, 2)
 	if err != nil {
-		log.Fatal(err)
 		return
 	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var re Reporte
-		err = rows.Scan(
-			&re.Id,
-			&re.Mensaje,
-			&re.CoordenadaX,
-			&re.CoordenadaY,
-			&re.Activo,
-			&re.TipoReporte,
-			&re.UsuarioId,
-			&re.DistritoId,
-			&re.CalleId,
-		)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		res = append(res, re)
-	}
+	res := querryWrapper[Reporte](
+		"SELECT * FROM Reporte WHERE UsuarioId = ?",
+		usuarioId,
+	)
 	elJson, err := json.Marshal(res)
 	if err != nil {
 		log.Fatal(err)
@@ -689,79 +550,29 @@ func handlerGetReportesByUsuario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(elJson)
-
 }
 func handlerGetReportesPropios(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	usuarioId, _, _, status, err := validarCookie(r)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	var res []Reporte
-	rows, err := db.Query("SELECT * FROM Reporte WHERE UsuarioId = ?", usuarioId)
+	usuarioId, _, err := authWrapper(r, w, 0)
 	if err != nil {
-		log.Fatal(err)
 		return
 	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var re Reporte
-		err = rows.Scan(
-			&re.Id,
-			&re.Mensaje,
-			&re.CoordenadaX,
-			&re.CoordenadaY,
-			&re.Activo,
-			&re.TipoReporte,
-			&re.UsuarioId,
-			&re.DistritoId,
-			&re.CalleId,
-		)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		res = append(res, re)
-	}
-	elJson, err := json.Marshal(res)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
+	res := querryWrapper[Reporte](
+		"SELECT * FROM Reporte WHERE UsuarioId = ?",
+		usuarioId,
+	)
+	jsonWrapper(res, w)
 }
 func handlerGetReportesDistritosPropios(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	usuarioID, _, _, status, err := validarCookie(r)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-	} else if err != nil {
-		log.Println("No se como paso esto (yupi!!!!)")
-		log.Fatal(err)
-		return
-	}
-	var res []Reporte
+	usuarioID, _, err := authWrapper(r, w, 0)
+	var res []*Reporte
 	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?", usuarioID)
 	if err != nil {
 		log.Fatal(err)
@@ -770,49 +581,15 @@ func handlerGetReportesDistritosPropios(w http.ResponseWriter, r *http.Request) 
 	defer rows.Close()
 	for rows.Next() {
 		var d UsuarioDistrito
-		err = rows.Scan(&d.DistritoID, &d.Distrito, &d.Canton, &d.Provincia, &d.UsuarioId)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		rowsi, err := db.Query(
+		d.populate(rows)
+		i := querryWrapper[Reporte](
 			"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
 			d.DistritoID,
 		)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		defer rowsi.Close()
-		for rowsi.Next() {
-			var re Reporte
-			err = rowsi.Scan(
-				&re.Id,
-				&re.Mensaje,
-				&re.CoordenadaX,
-				&re.CoordenadaY,
-				&re.Activo,
-				&re.TipoReporte,
-				&re.UsuarioId,
-				&re.DistritoId,
-				&re.CalleId,
-			)
-			if err != nil {
-				log.Fatal(err)
-				return
-			}
-			res = append(res, re)
-		}
+		res = append(res, i...)
 	}
 
-	elJson, err := json.Marshal(res)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	w.Write(elJson)
-
+	jsonWrapper(res, w)
 }
 
 func asociarHandlersReportes() {

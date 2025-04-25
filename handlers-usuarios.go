@@ -367,10 +367,10 @@ func handlerBuscarUsuarios(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	usuarios := querryWrapper[Usuario](
-		"SELECT * FROM Usuarios WHERE Username LIKE ?",
+		"SELECT * FROM Usuarios WHERE Username LIKE ? AND NOT UsuarioId = 1",
 		"%"+usuarioID+"%",
 	)
-	jsonWrapper(usuarios[1:], w)
+	jsonWrapper(usuarios, w)
 }
 
 func asociarHandlersUsuarios() {

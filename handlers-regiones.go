@@ -130,6 +130,36 @@ func handlerGetProvinciaById(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonWrapper(p, w)
 }
+func handlerGetCalleById(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	calleId, err := strconv.Atoi(r.URL.Query().Get("id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	calle := struct {
+		NombreCalle string `json:"nombreCalle"`
+		CalleId     int    `json:"calleId"`
+	}{}
+	row := db.QueryRow("SELECT * FROM Calles WHERE CalleId = ?", calleId)
+	err = row.Scan(&calle.CalleId, &calle.NombreCalle)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("no existe una provincia con este id"))
+			return
+		} else {
+			log.Fatal(err)
+			return
+		}
+	}
+	jsonWrapper(calle, w)
+
+}
 
 func asociarHandlersRegiones() {
 	http.HandleFunc("/getDistritosByCanton", handlerGetDistritosByCanton)
@@ -138,4 +168,5 @@ func asociarHandlersRegiones() {
 	http.HandleFunc("/getDistritoById", handlerGetDistritoById)
 	http.HandleFunc("/getCantonById", handlerGetCantonById)
 	http.HandleFunc("/getProvinciaById", handlerGetProvinciaById)
+	http.HandleFunc("/getCalleById", handlerGetCalleById)
 }

@@ -113,3 +113,30 @@
 * /eliminarAsociacionTodas
   - POST
   - el request debe contener un json en el cuerpo que contenga `usuarioId`
+
+# endpoints regionales
+
+* /getDistritosByUsuario
+  - GET
+  - el request debe contener el parametro de url `usuario`
+* /getDistritosByCanton
+  - GET
+  - el request debe contener el parametro de url `id`
+* /getCantonesByProvincia
+  - GET
+  - el request debe contener el parametro de url `id`
+* /getProvincias
+  - GET
+  - el request no requiere ningun parametro
+* /getDistritoById
+  - GET
+  - el request debe contener el parametro de url `id`
+* /getCantonById
+  - GET
+  - el request debe contener el parametro de url `id`
+* /getProvinciaById
+  - GET
+  - el request debe contener el parametro de url `id`
+* /getCalleById
+  - GET
+  - el request debe contener el parametro de url `id`

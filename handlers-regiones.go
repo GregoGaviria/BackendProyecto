@@ -144,9 +144,10 @@ func handlerGetCalleById(w http.ResponseWriter, r *http.Request) {
 	calle := struct {
 		NombreCalle string `json:"nombreCalle"`
 		CalleId     int    `json:"calleId"`
+		DistriId    int    `json:"distritoId"`
 	}{}
 	row := db.QueryRow("SELECT * FROM Calles WHERE CalleId = ?", calleId)
-	err = row.Scan(&calle.CalleId, &calle.NombreCalle)
+	err = row.Scan(&calle.CalleId, &calle.NombreCalle, &calle.DistriId)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			w.WriteHeader(http.StatusBadRequest)

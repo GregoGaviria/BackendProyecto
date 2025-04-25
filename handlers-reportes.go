@@ -226,18 +226,15 @@ func lcsCompare(comparador string, lista []string) string {
 	lcsRecursive = func(s1 *string, s2 *string, l1 int, l2 int, result *int) {
 		// return caso base
 		if l1 == 0 || l2 == 0 {
-			// log.Printf("終了 '%s' '%s' '%d' '%d'", *s1, *s2, l1, l2)
 			*result = 0
 			return
 		}
 
 		var r int
 		if (*s1)[l1-1] == (*s2)[l2-1] {
-			// log.Printf("正解 '%s' '%s' '%d' '%d'", *s1, *s2, l1, l2)
 			lcsRecursive(s1, s2, l1-1, l2-1, &r)
 			*result = 1 + r
 		} else {
-			// log.Printf("違い '%s' '%s' '%d' '%d'", *s1, *s2, l1, l2)
 			var result1 int
 			var result2 int
 			var wg sync.WaitGroup
@@ -251,8 +248,6 @@ func lcsCompare(comparador string, lista []string) string {
 				lcsRecursive(s1, s2, l1, l2-1, &result2)
 			}()
 			wg.Wait()
-			// lcsRecursive(s1, s2, l1-1, l2, &result1)
-			// lcsRecursive(s1, s2, l1, l2-1, &result2)
 			*result = max(result1, result2)
 		}
 	}
@@ -453,7 +448,7 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			i := querryWrapper[Reporte](
-				"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
+				"SELECT * FROM Reporte WHERE DistritoId = ?",
 				idD,
 			)
 			res = append(res, i...)
@@ -483,7 +478,7 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			i := querryWrapper[Reporte](
-				"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
+				"SELECT * FROM Reporte WHERE DistritoId = ? AND",
 				idD,
 			)
 			res = append(res, i...)
@@ -496,7 +491,7 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		res = querryWrapper[Reporte](
-			"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
+			"SELECT * FROM Reporte WHERE DistritoId = ?",
 			id,
 		)
 	} else {
@@ -583,7 +578,7 @@ func handlerGetReportesDistritosPropios(w http.ResponseWriter, r *http.Request) 
 		var d UsuarioDistrito
 		d.populate(rows)
 		i := querryWrapper[Reporte](
-			"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = 1",
+			"SELECT * FROM Reporte WHERE DistritoId = ?",
 			d.DistritoID,
 		)
 		res = append(res, i...)

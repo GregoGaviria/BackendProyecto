@@ -370,7 +370,7 @@ func handlerBuscarUsuarios(w http.ResponseWriter, r *http.Request) {
 		"SELECT * FROM Usuarios WHERE Username LIKE ?",
 		"%"+usuarioID+"%",
 	)
-	jsonWrapper(usuarios, w)
+	jsonWrapper(usuarios[1:], w)
 }
 
 func asociarHandlersUsuarios() {

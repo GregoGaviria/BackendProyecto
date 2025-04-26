@@ -768,7 +768,7 @@ INSERT INTO Distritos VALUES (70603,"Pocora",706);
 INSERT INTO Distritos VALUES (70604,"Río Jiménez",706);
 INSERT INTO Distritos VALUES (70605,"Duacarí",706);
 INSERT INTO Usuarios (NivelAcceso, Username, Password) VALUES (0,"[Usuario Eliminado]", "*");
-INSERT INTO Usuarios (NivelAcceso, Username, Password) VALUES (1,"Jorge Bastos","culto");
+INSERT INTO Usuarios (NivelAcceso, Username, Password) VALUES (1,"Usuario A","clave");
 INSERT INTO Usuarios (NivelAcceso, Username, Password) VALUES (2,"Hoshimachi Suisei","kyoumokawaii");
 INSERT INTO Usuarios (NivelAcceso, Username, Password) VALUES (3,"Pipkin Pippa","mold");
 INSERT INTO Usuarios (NivelAcceso, Username, Password) VALUES (4,"Eiai Nano","rentarou");

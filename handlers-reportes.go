@@ -593,7 +593,7 @@ func handlerGetReportesTodos(w http.ResponseWriter, r *http.Request) {
 	}
 	var res []*Reporte
 	res = querryWrapper[Reporte](
-		"SELECT * FROM Reporte",
+		"SELECT * FROM Reporte WHERE ACTIVO = 1",
 	)
 	jsonWrapper(res, w)
 

@@ -586,6 +586,18 @@ func handlerGetReportesDistritosPropios(w http.ResponseWriter, r *http.Request) 
 
 	jsonWrapper(res, w)
 }
+func handlerGetReportesTodos(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	var res []*Reporte
+	res = querryWrapper[Reporte](
+		"SELECT * FROM Reporte",
+	)
+	jsonWrapper(res, w)
+
+}
 
 func asociarHandlersReportes() {
 	http.HandleFunc("/desactivarReporte", handlerDesactivarReporte)
@@ -595,4 +607,5 @@ func asociarHandlersReportes() {
 	http.HandleFunc("/getReportesByUsuario", handlerGetReportesByUsuario)
 	http.HandleFunc("/getReportesPropios", handlerGetReportesPropios)
 	http.HandleFunc("/getReportesDistritosPropios", handlerGetReportesDistritosPropios)
+	http.HandleFunc("/getReportesTodos", handlerGetReportesTodos)
 }

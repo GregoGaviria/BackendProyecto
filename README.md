@@ -83,6 +83,9 @@
   - no se necesita ningun parametro
   - devuelve una lista de reportes activos en los distritos que el usuario tiene asignado
   - solo para administradores
+* /getReportesTodos
+  - GET
+  - no se necesita ningun parametro
 
 # endpoints de usuarios
 * /buscarUsuarios

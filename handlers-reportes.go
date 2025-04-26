@@ -421,6 +421,14 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 	distritoId := r.URL.Query().Get("distritoId")
 	cantonId := r.URL.Query().Get("cantonId")
 	provinciaId := r.URL.Query().Get("provinciaId")
+	activo, err := strconv.Atoi(r.URL.Query().Get("activo"))
+	if err != nil {
+		activo = 1
+	}
+	if activo == 0 || activo == 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("activo debe ser 1 o 0"))
+	}
 	var res []*Reporte
 
 	if provinciaId != "" && distritoId == "" && cantonId == "" {
@@ -448,8 +456,8 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			i := querryWrapper[Reporte](
-				"SELECT * FROM Reporte WHERE DistritoId = ?",
-				idD,
+				"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = ?",
+				idD, activo,
 			)
 			res = append(res, i...)
 		}
@@ -478,8 +486,8 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			i := querryWrapper[Reporte](
-				"SELECT * FROM Reporte WHERE DistritoId = ? AND",
-				idD,
+				"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = ?",
+				idD, activo,
 			)
 			res = append(res, i...)
 		}
@@ -491,8 +499,8 @@ func handlerGetReportesByRegion(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		res = querryWrapper[Reporte](
-			"SELECT * FROM Reporte WHERE DistritoId = ?",
-			id,
+			"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = ?",
+			id, activo,
 		)
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
@@ -566,6 +574,14 @@ func handlerGetReportesDistritosPropios(w http.ResponseWriter, r *http.Request) 
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	activo, err := strconv.Atoi(r.URL.Query().Get("activo"))
+	if err != nil {
+		activo = 1
+	}
+	if activo == 0 || activo == 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("activo debe ser 1 o 0"))
+	}
 	usuarioID, _, err := authWrapper(r, w, 0)
 	var res []*Reporte
 	rows, err := db.Query("SELECT * FROM UsuariosDistritosView WHERE UsuarioId = ?", usuarioID)
@@ -578,8 +594,8 @@ func handlerGetReportesDistritosPropios(w http.ResponseWriter, r *http.Request) 
 		var d UsuarioDistrito
 		d.populate(rows)
 		i := querryWrapper[Reporte](
-			"SELECT * FROM Reporte WHERE DistritoId = ?",
-			d.DistritoID,
+			"SELECT * FROM Reporte WHERE DistritoId = ? AND Activo = ?",
+			d.DistritoID, activo,
 		)
 		res = append(res, i...)
 	}
